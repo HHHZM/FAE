@@ -36,6 +36,8 @@ class Index2Dict:
         elif name == DimensionReductionByPCC().GetName():
             return DimensionReductionByPCC()
 
+        elif name == FeatureSelectByBC().GetName():
+            return FeatureSelectByBC()
         elif name == FeatureSelectByRelief().GetName():
             return FeatureSelectByRelief()
         elif name == FeatureSelectByANOVA().GetName():

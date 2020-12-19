@@ -1,0 +1,33 @@
+{
+    "balancer": "SMOTE", 
+    "normalizer_list": [
+        "Mean",
+        "MinMax",
+        "Zscore"
+    ],
+    "dimension_reduction_list": [
+        "PCA",
+        "PCC"
+    ],
+    "feature_selector_list": [
+        "BC",
+        "Relief",
+        "ANOVA",
+        "RFE",
+        "KW"
+    ],
+    "feature_selector_num_list": "list(range(1, 20))",
+    "classifier_list": [
+        "SVM",
+        "LDA",
+        "AE",
+        "RF",
+        "DT",
+        "AB",
+        "NB",
+        "GP",
+        "LR",
+        "LRLasso"
+    ],
+    "cross_validation": "10-Fold"
+}

@@ -1,3 +1,10 @@
+'''
+author: Hong Ziming
+Date: 2020-12-12 22:28:15
+LastEditTime: 2020-12-12 22:37:36
+LastEditors: Hong Ziming
+Description:  
+'''
 import os
 import json
 import traceback
@@ -83,12 +90,12 @@ class RandomSeed:
                 self.random_seed[CLASSIFIER_SVM] = 0
 
 
-RANDOM_SEED = RandomSeed(r'HyperParameters\RandomSeed.json').random_seed
+RANDOM_SEED = RandomSeed('HyperParameters/RandomSeed.json').random_seed
 
 
 if __name__ == '__main__':
     import os
     print(os.getcwd())
     print(os.path.abspath(os.getcwd()))
-    rs = RandomSeed(r'..\..\HyperParameters\RandomSeed.json')
+    rs = RandomSeed('../../HyperParameters/RandomSeed.json')
     print(rs.random_seed)

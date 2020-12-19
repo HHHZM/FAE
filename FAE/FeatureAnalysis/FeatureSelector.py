@@ -18,6 +18,8 @@ from FAE.DataContainer.DataContainer import DataContainer
 from FAE.HyperParameterConfig.HyperParamManager import HyperParameterManager
 from Utility.EcLog import eclog
 
+import BregmanCorentropy.fs as BCfs
+
 
 def SaveSelectInfo(feature_name, store_path, is_merge=False):
     info = {}
@@ -221,6 +223,50 @@ class FeatureSelectByAnalysis(FeatureSelector):
         pass
 
 
+# self Bregman Conditional divergence
+class FeatureSelectByBC(FeatureSelectByAnalysis):
+    def __init__(self, selected_feature_number=1):
+        super(FeatureSelectByBC, self).__init__(name='BC', selected_feature_number=selected_feature_number)
+        self.selected_index = []
+
+    def SaveInfo(self, store_folder):
+        return
+
+    def GetDescription(self):
+        return ''
+
+    def GetSelectedFeatureIndex(self, data_container):
+        features = data_container.GetArray()
+
+        feature_name = data_container.GetFeatureName()
+        feature_name_np = np.array(feature_name)[np.newaxis,:]
+
+        labels = data_container.GetLabel()[:, np.newaxis]
+        
+        select_num = self.GetSelectedFeatureNumber()
+        select_fname = BCfs.feature_rank(features, feature_name_np, labels, select_num=select_num)
+        return [feature_name.index(f) for f in select_fname]
+
+    def ClearFoldResult(self):
+        self.selected_index = []
+        return
+
+    def PreRun(self, data_container):
+        selected_index = self.GetSelectedFeatureIndex(data_container)
+        self.selected_index = selected_index
+
+    def Run(self, data_container, store_folder='', store_key=''):
+        # self._raw_features = data_container.GetFeatureName()
+        selected_index = self.selected_index[:self.GetSelectedFeatureNumber()]
+        new_data_container = self.SelectFeatureByIndex(data_container, selected_index, is_replace=False)
+        self._selected_features = new_data_container.GetFeatureName()
+        if store_folder and os.path.isdir(store_folder):
+            self.SaveInfo(store_folder)
+            self.SaveDataContainer(new_data_container, store_folder, store_key)
+
+        return new_data_container
+
+
 class FeatureSelectByANOVA(FeatureSelectByAnalysis):
     def __init__(self, selected_feature_number=1):
         super(FeatureSelectByANOVA, self).__init__(name='ANOVA', selected_feature_number=selected_feature_number)
@@ -314,7 +360,7 @@ class FeatureSelectByRelief(FeatureSelectByAnalysis):
 
     def __SortByRelief(self, data_container):
         data = data_container.GetArray()
-        data /= np.linalg.norm(data, ord=2, axis=0)
+        data /= np.linalg.norm(data, ord=2, axis=0) #用的smote之后的数据来做特征选择
         label = data_container.GetLabel()
 
         # initialization
@@ -387,7 +433,7 @@ class FeatureSelectByRelief(FeatureSelectByAnalysis):
         SaveSelectInfo(self._selected_features, featureinfo_store_path, is_merge=False)
 
     def GetSelectedFeatureIndex(self, data_container):
-        feature_sort_list = self.__SortByRelief(data_container)
+        feature_sort_list = self.__SortByRelief(data_container) # 每次迭代都算一遍，显然太慢了
         if len(feature_sort_list) < self.GetSelectedFeatureNumber():
             print(
                 'Relief: The number of features {:d} in data container is smaller than the required number {:d}'.format(
