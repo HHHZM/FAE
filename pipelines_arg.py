@@ -1,7 +1,3 @@
-"""
-All rights reserved.
---Yang SONG, Jun 17, 2018.
-"""
 
 import os
 import pickle
@@ -10,6 +6,7 @@ import csv
 import numpy as np
 from copy import deepcopy
 import json
+import argparse
 
 from FAE.DataContainer.DataContainer import DataContainer
 from FAE.FeatureAnalysis.IndexDict import Index2Dict
@@ -286,6 +283,93 @@ class PipelinesManager(object):
                                                                          '{}_prediction.csv'.format(CV_VAL)),
                                                              cv_val_info)
 
+
+    def RunWithCV_fold(self, train_container, fold, store_folder=''):
+        for group, containers in enumerate(self.cv.Generate(train_container)):
+            
+            if group != fold:
+                continue
+
+            cv_train_container, cv_val_container = containers
+
+            balance_cv_train_container = self.balance.Run(cv_train_container)
+            num = 0
+            for norm_index, normalizer in enumerate(self.normalizer_list):
+                norm_store_folder = MakeFolder(store_folder, normalizer.GetName())
+
+                # 在未执行类别平衡的数据集进行normalizetion
+                norm_cv_train_container_nonebalance = normalizer.Run(cv_train_container)
+
+                norm_cv_train_container = normalizer.Run(balance_cv_train_container)
+                norm_cv_val_container = normalizer.Transform(cv_val_container)
+
+                for dr_index, dr in enumerate(self.dimension_reduction_list):
+                    dr_store_folder = MakeFolder(norm_store_folder, dr.GetName())
+                    if dr:
+                        dr_cv_train_container = dr.Run(norm_cv_train_container)
+                        dr_cv_val_container = dr.Transform(norm_cv_val_container)
+                        # 未平衡
+                        dr_cv_val_container_nonebalance = dr.Transform(norm_cv_train_container_nonebalance)
+                    else:
+                        dr_cv_train_container = norm_cv_train_container
+                        dr_cv_val_container = norm_cv_val_container
+                        # 未平衡
+                        dr_cv_val_container_nonebalance = norm_cv_train_container_nonebalance
+
+                    for fs_index, fs in enumerate(self.feature_selector_list):
+
+                        # 由于效率问题，BC单独拿出来算
+                        if fs.GetName() == 'BC':
+                            fs.ClearFoldResult()
+                            fs.SetSelectedFeatureNumber(max(self.feature_selector_num_list))
+                            fs.PreRun(dr_cv_train_container)
+                        # ！！！写到这里了 后续再加一个参数 控制bc在哪里算
+
+                        for fn_index, fn in enumerate(self.feature_selector_num_list):
+                            if fs:
+                                fs_store_folder = MakeFolder(dr_store_folder, '{}_{}'.format(fs.GetName(), fn))
+                                fs.SetSelectedFeatureNumber(fn)
+                                fs_cv_train_container = fs.Run(dr_cv_train_container)
+                                fs_cv_val_container = fs.Transform(dr_cv_val_container)
+                            else:
+                                fs_store_folder = dr_store_folder
+                                fs_cv_train_container = dr_cv_train_container
+                                fs_cv_val_container = dr_cv_val_container
+
+                            for cls_index, cls in enumerate(self.classifier_list):
+                                cls_store_folder = MakeFolder(fs_store_folder, cls.GetName())
+                                model_name = self.GetStoreName(normalizer.GetName(),
+                                                               dr.GetName(),
+                                                               fs.GetName(),
+                                                               str(fn),
+                                                               cls.GetName())
+                                num += 1
+                                print(self.total_num, num, group)
+
+                                cls.SetDataContainer(fs_cv_train_container)
+                                cls.Fit()
+
+                                cv_train_pred = cls.Predict(fs_cv_train_container.GetArray())
+                                cv_train_label = fs_cv_train_container.GetLabel()
+                                cv_train_info = pd.DataFrame({'Pred': cv_train_pred, 'Label': cv_train_label,
+                                                              'Group': [group for temp in cv_train_label]},
+                                                             index=fs_cv_train_container.GetCaseName())
+
+                                cv_val_pred = cls.Predict(fs_cv_val_container.GetArray())
+                                cv_val_label = fs_cv_val_container.GetLabel()
+                                cv_val_info = pd.DataFrame({'Pred': cv_val_pred, 'Label': cv_val_label,
+                                                            'Group': [group for temp in cv_val_label]},
+                                                           index=fs_cv_val_container.GetCaseName())
+
+                                if store_folder:
+                                    self._AddOneCvPrediction(os.path.join(cls_store_folder,
+                                                                         '{}_prediction.csv'.format(CV_TRAIN)),
+                                                             cv_train_info)
+                                    self._AddOneCvPrediction(os.path.join(cls_store_folder,
+                                                                         '{}_prediction.csv'.format(CV_VAL)),
+                                                             cv_val_info)
+
+
     def MergeCvResult(self, store_folder):
         num = 0
         for norm_index, normalizer in enumerate(self.normalizer_list):
@@ -335,56 +419,31 @@ class PipelinesManager(object):
         self.total_metric[CV_VAL].to_csv(os.path.join(store_folder, '{}_results.csv'.format(CV_VAL)))
 
 
-if __name__ == '__main__':
+def main(args):
 
-    with open('args.json', 'r') as f:
-        args = json.load(f)
+    balancer = args['balancer']
+    normalizer_list = args['normalizer_list']
+    dimension_reduction_list = args['dimension_reduction_list']
+    feature_selector_list = args['feature_selector_list']
+    feature_selector_args_dict = args['feature_selector_args_dict']
+    feature_selector_num_list = args['feature_selector_num_list']
+    classifier_list = args['classifier_list']
+    cross_validation = args['cross_validation']
+    fold_list = args["fold_list"]
 
-    balancer = 'SMOTE'
-    normalizer_list = [
-        'Mean',
-        'MinMax',
-        'Zscore'
-    ]
-    dimension_reduction_list = [
-        # 'PCA',
-        'PCC'
-    ]
-    feature_selector_list = [
-        'BC',
-        # 'Relief',
-        # 'ANOVA',
-        # 'RFE',
-        # 'KW'
-    ]
-    feature_selector_num_list = list(range(1, 20))
-    classifier_list = [
-        'SVM',
-        'LDA',
-        'AE',
-        'RF',
-        'DT',
-        'AB',
-        'NB',
-        'GP',
-        'LR',
-        'LRLasso'
-    ]
-    cross_validation = '10-Fold'
-
-    manager = PipelinesManager()
-
-    index_dict = Index2Dict()
+    train_csv = args['train_csv']
+    # test_csv = args['test_csv']
+    store_folder_path = args['store_folder_path']
 
     train = DataContainer()
-    test = DataContainer()
-    train.Load('data_clinical_107/train_numeric_feature.csv')
-    # test.Load('data_clinical_107/test_numeric_feature.csv')
+    train.Load(train_csv)
 
-    store_folder_path = 'data_clinical_107/save_withcv'
     if os.path.exists(store_folder_path):
         os.system('rm -r ' + store_folder_path)
     os.system('mkdir ' + store_folder_path)
+
+    manager = PipelinesManager()
+    index_dict = Index2Dict()
 
     faps = PipelinesManager(balancer=index_dict.GetInstantByIndex(balancer),
                             normalizer_list=[index_dict.GetInstantByIndex(i) for i in normalizer_list],
@@ -394,10 +453,34 @@ if __name__ == '__main__':
                             classifier_list=[index_dict.GetInstantByIndex(i) for i in classifier_list],
                             cross_validation=index_dict.GetInstantByIndex(cross_validation))
 
+    # 方便设置BC的参数
+    for feature_selector in faps.feature_selector_list:
+        if feature_selector.GetName() in feature_selector_args_dict.keys():
+            for k, v in feature_selector_args_dict[feature_selector.GetName()].items():
+                exec('feature_selector.' + k + ' = v')
 
-    for total, num, group in faps.RunWithCV(train, store_folder=store_folder_path):
-        print(total, num, group)
-    for total, num in faps.MergeCvResult(store_folder=store_folder_path):
-        print(total, num)
+    # for total, num, group in faps.RunWithCV(train, store_folder=store_folder_path):
+    #     print(total, num, group)
+    for fold in fold_list:
+        store_folder_path_fold = os.path.join(store_folder_path, 'fold_' + str(fold))
+        os.system('mkdir ' + store_folder_path_fold)
+        faps.RunWithCV_fold(train, fold=fold, store_folder=store_folder_path_fold)
 
-    print('Done')
+    # for total, num in faps.MergeCvResult(store_folder=store_folder_path):
+    #     print(total, num)
+
+    return 
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='args.json')
+    args_config = parser.parse_args()
+
+    with open(args_config.config, 'r') as f:
+        args = json.load(f)
+
+    main(args)
+
+    

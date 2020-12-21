@@ -225,9 +225,13 @@ class FeatureSelectByAnalysis(FeatureSelector):
 
 # self Bregman Conditional divergence
 class FeatureSelectByBC(FeatureSelectByAnalysis):
-    def __init__(self, selected_feature_number=1):
+    def __init__(self, selected_feature_number=1, kernel_size=1, perm_num=100, num_cores=20):
         super(FeatureSelectByBC, self).__init__(name='BC', selected_feature_number=selected_feature_number)
         self.selected_index = []
+
+        self.kernel_size = kernel_size
+        self.perm_num = perm_num
+        self.num_cores = num_cores
 
     def SaveInfo(self, store_folder):
         return
@@ -244,7 +248,10 @@ class FeatureSelectByBC(FeatureSelectByAnalysis):
         labels = data_container.GetLabel()[:, np.newaxis]
         
         select_num = self.GetSelectedFeatureNumber()
-        select_fname = BCfs.feature_rank(features, feature_name_np, labels, select_num=select_num)
+        select_fname = BCfs.feature_rank(features, feature_name_np, labels, select_num=select_num,
+                                         kernel_size=self.kernel_size,
+                                         perm_num=self.perm_num,
+                                         num_cores=self.num_cores)
         return [feature_name.index(f) for f in select_fname]
 
     def ClearFoldResult(self):
