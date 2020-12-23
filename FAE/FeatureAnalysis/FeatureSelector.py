@@ -225,13 +225,15 @@ class FeatureSelectByAnalysis(FeatureSelector):
 
 # self Bregman Conditional divergence
 class FeatureSelectByBC(FeatureSelectByAnalysis):
-    def __init__(self, selected_feature_number=1, kernel_size=1, perm_num=100, num_cores=20):
+    def __init__(self, selected_feature_number=1, kernel_size=1, perm_num=100, num_cores=20, target='balance'):
         super(FeatureSelectByBC, self).__init__(name='BC', selected_feature_number=selected_feature_number)
         self.selected_index = []
 
         self.kernel_size = kernel_size
         self.perm_num = perm_num
         self.num_cores = num_cores
+
+        self.target = target
 
     def SaveInfo(self, store_folder):
         return

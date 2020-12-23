@@ -322,8 +322,11 @@ class PipelinesManager(object):
                         if fs.GetName() == 'BC':
                             fs.ClearFoldResult()
                             fs.SetSelectedFeatureNumber(max(self.feature_selector_num_list))
-                            fs.PreRun(dr_cv_train_container)
-                        # ！！！写到这里了 后续再加一个参数 控制bc在哪里算
+                            if fs.target == 'balance':
+                                fs.PreRun(dr_cv_train_container)
+                            # 设置为在未进行SMOTE数据平衡的情况下进行BC特征选择
+                            elif fs.target == 'nonebalance':
+                                fs.PreRun(dr_cv_val_container_nonebalance)
 
                         for fn_index, fn in enumerate(self.feature_selector_num_list):
                             if fs:
