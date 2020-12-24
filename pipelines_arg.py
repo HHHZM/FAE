@@ -422,6 +422,54 @@ class PipelinesManager(object):
         self.total_metric[CV_VAL].to_csv(os.path.join(store_folder, '{}_results.csv'.format(CV_VAL)))
 
 
+    def RunWithCV_fold_merge(self, train_container, store_folder=''):
+        store_folder_target = MakeFolder(store_folder, 'cross_validation')
+
+        for group, containers in enumerate(self.cv.Generate(train_container)):
+            # 当前fold的路径
+            store_folder_fold = MakeFolder(store_folder, 'fold_' + str(group))
+
+            for norm_index, normalizer in enumerate(self.normalizer_list):
+                norm_store_folder = MakeFolder(store_folder_fold, normalizer.GetName())
+                norm_store_folder_t = MakeFolder(store_folder_target, normalizer.GetName())
+                
+                for dr_index, dr in enumerate(self.dimension_reduction_list):
+                    dr_store_folder = MakeFolder(norm_store_folder, dr.GetName())
+                    dr_store_folder_t = MakeFolder(norm_store_folder_t, dr.GetName())
+
+                    for fs_index, fs in enumerate(self.feature_selector_list):
+
+                        for fn_index, fn in enumerate(self.feature_selector_num_list):
+                            if fs:
+                                fs_store_folder = MakeFolder(dr_store_folder, '{}_{}'.format(fs.GetName(), fn))
+                                fs_store_folder_t = MakeFolder(dr_store_folder_t, '{}_{}'.format(fs.GetName(), fn))
+                            else:
+                                fs_store_folder = dr_store_folder
+                                fs_store_folder_t = dr_store_folder_t
+
+                            for cls_index, cls in enumerate(self.classifier_list):
+                                cls_store_folder = MakeFolder(fs_store_folder, cls.GetName())
+                                cls_store_folder_t = MakeFolder(fs_store_folder_t, cls.GetName())
+
+                                # model_name = self.GetStoreName(normalizer.GetName(),
+                                #                                dr.GetName(),
+                                #                                fs.GetName(),
+                                #                                str(fn),
+                                #                                cls.GetName())
+
+                                cv_train_info = pd.read_csv(os.path.join(cls_store_folder, '{}_prediction.csv'.format(CV_TRAIN)), index_col=0)
+                                cv_val_info = pd.read_csv(os.path.join(cls_store_folder, '{}_prediction.csv'.format(CV_VAL)), index_col=0)
+                                
+                                self._AddOneCvPrediction(os.path.join(cls_store_folder_t,
+                                                                        '{}_prediction.csv'.format(CV_TRAIN)),
+                                                            cv_train_info)
+                                self._AddOneCvPrediction(os.path.join(cls_store_folder_t,
+                                                                        '{}_prediction.csv'.format(CV_VAL)),
+                                                            cv_val_info)
+        
+        return store_folder_target
+
+
 def main(args):
 
     balancer = args['balancer']
@@ -464,13 +512,16 @@ def main(args):
 
     # for total, num, group in faps.RunWithCV(train, store_folder=store_folder_path):
     #     print(total, num, group)
+
     for fold in fold_list:
         store_folder_path_fold = os.path.join(store_folder_path, 'fold_' + str(fold))
         os.system('mkdir ' + store_folder_path_fold)
         faps.RunWithCV_fold(train, fold=fold, store_folder=store_folder_path_fold)
 
-    # for total, num in faps.MergeCvResult(store_folder=store_folder_path):
-    #     print(total, num)
+    cv_merge_folder = faps.RunWithCV_fold_merge(train, store_folder=store_folder_path)
+
+    for total, num in faps.MergeCvResult(store_folder=cv_merge_folder):
+        print(total, num)
 
     return 
 
