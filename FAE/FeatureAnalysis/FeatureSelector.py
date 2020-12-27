@@ -19,6 +19,7 @@ from FAE.HyperParameterConfig.HyperParamManager import HyperParameterManager
 from Utility.EcLog import eclog
 
 import BregmanCorentropy.fs as BCfs
+import transplant
 
 
 def SaveSelectInfo(feature_name, store_path, is_merge=False):
@@ -181,12 +182,13 @@ class FeatureSelectBySubName(FeatureSelector):
 
 #################################################################
 class FeatureSelectByAnalysis(FeatureSelector):
-    def __init__(self, name='', selected_feature_number=0):
+    def __init__(self, name='', selected_feature_number=0, target='balance'):
         super(FeatureSelectByAnalysis, self).__init__()
         self.__selected_feature_number = selected_feature_number
         self._selected_features = []
         self._raw_features = []
         self._name = name
+        self.target = target
 
     def SetSelectedFeatureNumber(self, selected_feature_number):
         self.__selected_feature_number = selected_feature_number
@@ -225,15 +227,14 @@ class FeatureSelectByAnalysis(FeatureSelector):
 
 # self Bregman Conditional divergence
 class FeatureSelectByBC(FeatureSelectByAnalysis):
-    def __init__(self, selected_feature_number=1, kernel_size=1, perm_num=100, num_cores=20, target='balance'):
+    def __init__(self, selected_feature_number=1, kernel_size=1, perm_num=100, num_cores=20):
         super(FeatureSelectByBC, self).__init__(name='BC', selected_feature_number=selected_feature_number)
         self.selected_index = []
 
         self.kernel_size = kernel_size
         self.perm_num = perm_num
         self.num_cores = num_cores
-
-        self.target = target
+        # self.target = target
 
     def SaveInfo(self, store_folder):
         return
@@ -255,6 +256,55 @@ class FeatureSelectByBC(FeatureSelectByAnalysis):
                                          perm_num=self.perm_num,
                                          num_cores=self.num_cores)
         return [feature_name.index(f) for f in select_fname]
+
+    def ClearFoldResult(self):
+        self.selected_index = []
+        return
+
+    def PreRun(self, data_container):
+        selected_index = self.GetSelectedFeatureIndex(data_container)
+        self.selected_index = selected_index
+
+    def Run(self, data_container, store_folder='', store_key=''):
+        # self._raw_features = data_container.GetFeatureName()
+        selected_index = self.selected_index[:self.GetSelectedFeatureNumber()]
+        new_data_container = self.SelectFeatureByIndex(data_container, selected_index, is_replace=False)
+        self._selected_features = new_data_container.GetFeatureName()
+        if store_folder and os.path.isdir(store_folder):
+            self.SaveInfo(store_folder)
+            self.SaveDataContainer(new_data_container, store_folder, store_key)
+
+        return new_data_container
+
+
+# self Renyi
+class FeatureSelectByRenyi(FeatureSelectByAnalysis):
+    def __init__(self, selected_feature_number=1, target='balance'):
+        super(FeatureSelectByRenyi, self).__init__(name='Renyi', selected_feature_number=selected_feature_number)
+        self.selected_index = []
+        self.target = target
+        self.matlab = None
+
+    def StartMATLAB(self):
+        self.matlab = transplant.Matlab(jvm=False, desktop=False)
+        self.matlab.addpath('Renyi')
+
+    def SaveInfo(self, store_folder):
+        return
+
+    def GetDescription(self):
+        return ''
+
+    def GetSelectedFeatureIndex(self, data_container):
+        if not self.matlab:
+            self.StartMATLAB()
+        features = data_container.GetArray()
+        labels = data_container.GetLabel()[:, np.newaxis]
+        select_num = self.GetSelectedFeatureNumber()
+        # matlab 索引+1
+        select_idx = self.matlab.select_features_Renyi(features, labels + 1, select_num)
+        select_idx = (np.squeeze(select_idx) - 1).astype(np.int)
+        return select_idx.tolist()
 
     def ClearFoldResult(self):
         self.selected_index = []

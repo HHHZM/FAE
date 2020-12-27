@@ -1,0 +1,42 @@
+{   
+    "train_csv": "data_clinical_107/train_numeric_feature.csv",
+    "test_csv": "data_clinical_107/test_numeric_feature.csv",
+    "store_folder_path": "save_withcv_new",
+
+    "balancer": "SMOTE", 
+    "normalizer_list": [
+        "Mean"
+    ],
+    "dimension_reduction_list": [
+        "PCC"
+    ],
+    "feature_selector_list": [
+        "KW",
+        "Renyi"
+    ],
+    "feature_selector_args_dict": {
+        "KW": {"target": "nonebalance"},
+        "BC": {
+            "kernel_size": 1,
+            "perm_num": 50,
+            "num_cores": 6,
+            "target": "nonebalance"
+        },
+        "Renyi": {
+            "target": "nonebalance"
+        }
+    },
+    "feature_selector_num_list": [
+        1,2
+    ],
+    "classifier_list": [
+        "SVM",
+        "LDA",
+        "AE",
+        "RF"
+    ],
+    "cross_validation": "5-Fold",
+    "fold_list": [
+        0,1,2,3,4
+    ]
+}

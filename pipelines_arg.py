@@ -319,7 +319,7 @@ class PipelinesManager(object):
                     for fs_index, fs in enumerate(self.feature_selector_list):
 
                         # 由于效率问题，BC单独拿出来算
-                        if fs.GetName() == 'BC':
+                        if fs.GetName() == 'BC' or fs.GetName() == 'Renyi':
                             fs.ClearFoldResult()
                             fs.SetSelectedFeatureNumber(max(self.feature_selector_num_list))
                             if fs.target == 'balance':
@@ -330,10 +330,22 @@ class PipelinesManager(object):
 
                         for fn_index, fn in enumerate(self.feature_selector_num_list):
                             if fs:
+                                # 创建目录以及设置特征数量
                                 fs_store_folder = MakeFolder(dr_store_folder, '{}_{}'.format(fs.GetName(), fn))
                                 fs.SetSelectedFeatureNumber(fn)
-                                fs_cv_train_container = fs.Run(dr_cv_train_container)
-                                fs_cv_val_container = fs.Transform(dr_cv_val_container)
+                                # 考虑BC以及renyi的特殊性
+                                if fs.GetName() == 'BC' or fs.GetName() == 'Renyi':
+                                    fs_cv_train_container = fs.Run(dr_cv_train_container)
+                                    fs_cv_val_container = fs.Transform(dr_cv_val_container)
+                                else:
+                                    # 对于其他方法，特殊处理平衡以及非平衡
+                                    if fs.target == 'balance':
+                                        fs_cv_train_container = fs.Run(dr_cv_train_container)
+                                        fs_cv_val_container = fs.Transform(dr_cv_val_container)
+                                    elif fs.target == 'nonebalance':
+                                        _ = fs.Run(dr_cv_val_container_nonebalance)
+                                        fs_cv_train_container = fs.Transform(dr_cv_train_container)
+                                        fs_cv_val_container = fs.Transform(dr_cv_val_container)
                             else:
                                 fs_store_folder = dr_store_folder
                                 fs_cv_train_container = dr_cv_train_container
